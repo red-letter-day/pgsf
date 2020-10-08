@@ -1,6 +1,9 @@
 package constants
 
 const (
+	OnStartSocketServer = "pgsf:StartServer"
+
 	OnInboundNetworkMessage = "pgsf:IncomingMessage"
-	OnStartSocketServer     = "pgsf:StartServer"
+	OnConnect               = "pgsf:OnConnect"
+	OnDisonnect             = "pgsf:OnConnect"
 )

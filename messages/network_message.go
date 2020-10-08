@@ -1,23 +1,19 @@
 package messages
 
 import (
-	"github.com/red-letter-day/pgsf/payload"
-	"reflect"
+	"github.com/olahol/melody"
 )
 
 // NetworkMessage contains the sender id, along with type information and the payload itself.
 type NetworkMessage struct {
-	Sender  uint64
-	Type    reflect.Type
-	Payload payload.PayloadInterface
+	Sender  *melody.Session
+	Payload []byte
 }
 
 // Creates a new inbound message, by reflecting on the payload type.
-func NewNetworkMessage(sender uint64, payload payload.PayloadInterface) NetworkMessage {
+func NewNetworkMessage(sender *melody.Session, payload []byte) NetworkMessage {
 	return NetworkMessage{
-		Sender: sender,
-		Type:   reflect.TypeOf(payload),
-
+		Sender:  sender,
 		Payload: payload,
 	}
 }
