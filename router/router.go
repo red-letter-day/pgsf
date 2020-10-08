@@ -1,6 +1,7 @@
 package router
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/olahol/melody"
 	"github.com/red-letter-day/pgsf/messages"
@@ -21,6 +22,11 @@ func NewRouter() *Router {
 	}
 }
 
+// Unmarshals data into requested structure. If not successful the function return an error.
+func unmarshalToTypePtr(data interface{}, typePtr interface{}) error {
+	return json.Unmarshal(data.([]byte), typePtr)
+}
+
 // On is used to add a message listener for a network message type.
 //
 // For instance:
@@ -35,6 +41,14 @@ func (r *Router) On(name string, callback interface{}) {
 	callbackDataElement := callbackType.In(1).Elem()
 	r.callbacks[name] = func(conn *melody.Session, data interface{}) {
 		result := reflect.New(callbackDataElement)
+
+		err := unmarshalToTypePtr(data, result.Interface())
+
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+
 		arguments := []reflect.Value{reflect.ValueOf(conn), result}
 		callbackValue.Call(arguments)
 	}
