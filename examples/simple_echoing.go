@@ -8,7 +8,7 @@ import (
 
 type ChatMessage struct {
 	Content  string `json:"content"`
-	Receiver int `json:"receiver"`
+	Receiver string `json:"receiver"`
 }
 
 func main() {
@@ -22,9 +22,23 @@ func main() {
 
 	server := pgsf.NewPgsfInstance(configuration)
 
-	server.Router.On("opc", func(sender *melody.Session, data *ChatMessage) {
+	r := server.Router
+
+	// TODO: Add chan support so we can run these async?
+	r.On("opc", func(sender *melody.Session, data *ChatMessage) {
 		chatMessage := *data
 		fmt.Println("Receive chatmessage:", chatMessage.Content, "and", chatMessage.Receiver)
+	})
+
+	r.OnConnect(func(sender *melody.Session) {
+		fmt.Println("User connected: ", )
+		_ = sender.Write([]byte("welcome"))
+	})
+
+	r.OnDisconnect(func(sender *melody.Session, message string) {
+		disconnectMessage, _ := sender.Get("dcmsg")
+		fmt.Println("User disconnected: ", disconnectMessage)
+		//_ = sender.Write([]byte("bye!"))
 	})
 
 	server.StartServer()

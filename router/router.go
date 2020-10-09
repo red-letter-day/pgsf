@@ -2,6 +2,7 @@ package router
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/olahol/melody"
 	"github.com/red-letter-day/pgsf/messages"
@@ -10,21 +11,17 @@ import (
 )
 
 type Router struct {
-	callbacks map[string]func(*melody.Session, interface{})
-	lock *sync.Mutex
+	callbacks             map[string]func(*melody.Session, interface{})
+	onConnectCallbacks    []func(session *melody.Session)
+	onDisconnectCallbacks []func(session *melody.Session)
+	lock                  *sync.Mutex
 }
 
 func NewRouter() *Router {
-	fmt.Println("init router")
 	return &Router{
 		callbacks: make(map[string]func(*melody.Session, interface{})),
-		lock: new(sync.Mutex),
+		lock:      new(sync.Mutex),
 	}
-}
-
-// Unmarshals data into requested structure. If not successful the function return an error.
-func unmarshalToTypePtr(data interface{}, typePtr interface{}) error {
-	return json.Unmarshal(data.([]byte), typePtr)
 }
 
 // On is used to add a message listener for a network message type.
@@ -35,41 +32,114 @@ func unmarshalToTypePtr(data interface{}, typePtr interface{}) error {
 // 		})
 //
 func (r *Router) On(name string, callback interface{}) {
+
+	// Stores value, which is going to be
 	callbackValue := reflect.ValueOf(callback)
 	callbackType := reflect.TypeOf(callback)
 
+	fmt.Printf("Adding <%s> callback for data type <%s>\n", name, callbackType)
+
 	callbackDataElement := callbackType.In(1).Elem()
-	r.callbacks[name] = func(conn *melody.Session, data interface{}) {
+
+	// Add the actual callback.
+	r.callbacks[name] = func(sender *melody.Session, data interface{}) {
+
+		// Becomes the type of the struct passed to .On()
+		// calling .Interface() on this will allow us to unmarshal into this type.
 		result := reflect.New(callbackDataElement)
 
-		err := unmarshalToTypePtr(data, result.Interface())
+		// Takes the data interface, turns it into []byte and attempts to unmarshal it into the reflected struct type.
+		err := json.Unmarshal(data.([]byte), result.Interface())
 
 		if err != nil {
-			fmt.Println(err)
+			// TODO: Better error handling in .On()
+			fmt.Printf("Unable to unmarshal data for type %s (%s)\n", callbackType, err)
 			return
 		}
 
-		arguments := []reflect.Value{reflect.ValueOf(conn), result}
+		// Build our arguments for the callback itself.
+		// Fills the first argument with the sender, and the second with the final unmarshaled struct.
+		arguments := []reflect.Value{reflect.ValueOf(sender), result}
+
+		// Calls the callback, delivering the data back to the .On function.
 		callbackValue.Call(arguments)
 	}
 }
 
-func (r *Router) ProcessByteMessage(connection *melody.Session, data []byte) error {
-	r.lock.Lock()
+// OnDisconnect adds a callback to the onDisconnectCallbacks list, which gets called on any client disconnections.
+func (r *Router) OnDisconnect(callback interface{}) {
+	// Store the types of the callback.
+	callbackValue := reflect.ValueOf(callback)
+	callbackType := reflect.TypeOf(callback)
 
+	fmt.Printf("Adding OnDisconnect callback for data type <%s>\n", callbackType)
+
+	// Add the actual callback.
+	r.onDisconnectCallbacks = append(r.onDisconnectCallbacks, func(sender *melody.Session) {
+
+		// Build our arguments for the callback itself.
+		// Fills the first argument with the sender, and the second with the final unmarshaled struct.
+		arguments := []reflect.Value{reflect.ValueOf(sender)}
+
+		callbackValue.Call(arguments)
+	})
+}
+
+// OnDisconnect adds a callback to the onConnectCallbacks list, which gets called on any client connections.
+func (r *Router) OnConnect(callback interface{}) {
+	// Store the types of the callback.
+	callbackValue := reflect.ValueOf(callback)
+	callbackType := reflect.TypeOf(callback)
+
+	fmt.Printf("Adding OnConnect callback for with type <%s>\n", callbackType)
+
+	// Add the actual callback.
+	r.onConnectCallbacks = append(r.onConnectCallbacks, func(sender *melody.Session) {
+
+		// Build our arguments for the callback itself.
+		// Fills the first argument with the sender, and the second with the final unmarshaled struct.
+		arguments := []reflect.Value{reflect.ValueOf(sender)}
+
+		callbackValue.Call(arguments)
+	})
+}
+
+// ProcessByteMessage takes the incoming data from the websocket server and calls the callback registered using .On()
+func (r *Router) ProcessByteMessage(connection *melody.Session, data []byte) error {
 	inboundMessage, err := messages.NewInboundMessage(data)
 
 	if err != nil {
 		return err
 	}
 
-	fmt.Println("inbound message string:", inboundMessage)
+	// This little trick essentially forces the compiler to cast the json.RawMessage (alias of []byte) into []byte.
+	// It is needed because casting directly causes a compiler error.
+	var bytedMessageData []byte
+	bytedMessageData = inboundMessage.Data
 
+	// Checks that the callback exists, and if it does, attempts to
 	if callback, ok := r.callbacks[inboundMessage.Name]; ok {
-		fmt.Println("calling callback with inbound name:", inboundMessage.Name)
-		callback(connection, inboundMessage.Data)
+		callback(connection, bytedMessageData)
+	} else {
+		return errors.New("attempted to call non-existant callback (" + inboundMessage.Name + ")")
 	}
 
-	r.lock.Unlock()
 	return nil
+}
+
+// ProcessDisconnectMessage calls all the registered connection callbacks.
+func (r *Router) ProcessDisconnectMessage(connection *melody.Session) {
+	r.processArrayCallbacks(connection, r.onDisconnectCallbacks)
+}
+
+// ProcessConnectionMessage calls all the registered connection callbacks.
+func (r *Router) ProcessConnectMessage(connection *melody.Session) {
+	r.processArrayCallbacks(connection, r.onConnectCallbacks)
+}
+
+// ProcessArrayCallbacks runs all the callbacks for the specified list of callbacks.
+func (r *Router) processArrayCallbacks(connection *melody.Session, callbacks []func(session *melody.Session)) {
+	for _, callback := range callbacks {
+		callback(connection)
+	}
 }

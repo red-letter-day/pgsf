@@ -28,20 +28,18 @@ func NewSocketServer(events *EventBus.Bus, router *router.Router) SocketServer {
 }
 
 // Initialize is called internally to add the default handlers.
+// Adds handlers for connection, disconnection and general messages.
 func (server *SocketServer) initialize() {
-	//events := *server.events
+
 	server.Melody.HandleConnect(func(sender *melody.Session) {
-		//events.Publish(constants.OnConnect, sender)
-		// TODO: Add .OnConnect
+		server.router.ProcessConnectMessage(sender)
 	})
 
 	server.Melody.HandleDisconnect(func(sender *melody.Session) {
-		//events.Publish(constants.OnDisonnect, sender)
-		// TODO: Add .OnDisconnect
+		server.router.ProcessDisconnectMessage(sender)
 	})
 
 	server.Melody.HandleMessage(func(sender *melody.Session, message []byte) {
-		//events.Publish(constants.OnInboundNetworkMessage, messages.NewNetworkMessage(sender, message))
 		err := server.router.ProcessByteMessage(sender, message)
 		if err != nil {
 			fmt.Println("error processing message:", err)
@@ -49,6 +47,7 @@ func (server *SocketServer) initialize() {
 	})
 }
 
+// Websocket handler
 func (server *SocketServer) WebsocketHandler(w http.ResponseWriter, r *http.Request) error {
 	return server.Melody.HandleRequest(w, r)
 }
