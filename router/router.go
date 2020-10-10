@@ -43,6 +43,8 @@ func (r *Router) On(name string, callback interface{}) {
 
 	// Add the actual callback.
 	r.callbacks[name] = func(sender *melody.Session, data interface{}) {
+		// Note: This method of converting json into a strongly typed implementation on the callback side
+		// is shamelessly stolen from github.com/trevex/golem, which solves this pretty decently in the router.go file.
 
 		// Becomes the type of the struct passed to .On()
 		// calling .Interface() on this will allow us to unmarshal into this type.
