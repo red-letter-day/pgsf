@@ -1,6 +1,9 @@
-# 🎮  pgsf
+# 🎮 pgsf
 pgsf, or pragmatic game server framework is an opinonated library used to write concise, simple and fast game servers using Websockets.
-    
+
+## 🏗 Builds
+![Go](https://github.com/red-letter-day/pgsf/workflows/Go/badge.svg)
+
 ## 🤼  Contributions
 
 1. Create a feature branch and give it a somewhat descriptive name in the style of: `feature/month/short_title`.
